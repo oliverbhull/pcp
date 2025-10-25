@@ -2,30 +2,26 @@ Personal Context Protocol (PCP)
 Concise Specification — v0.1 — 19 Apr 2025
 
 0. Snapshot
+
 Purpose Secure, user‑approved sharing of personal context with external agents and models.
-
-
 Core Promise Nothing leaves the user vault without an explicit, revocable token.
 
 
 1. Guiding Principles
+
 User Primacy Opt‑in, revocable, transparent at every step.
-
-
 Least Data Only what the requester needs, truncated at source.
-
-
 Cryptographic Audit Every request, approval, and release is hashed and signed.
-
-
 Modularity Runs fully on‑device or via a phone relay; cloud storage is optional.
 
-
 2. Layered Architecture
+
 [Wearable Mic] ⇄ [Phone Vault SDK] ⇄ [PCP Gateway API] ⇄ [External Agent]
                        ↑                         ↓
             [Approval Queue UI] ← [Notification Service]
+
 3. Data Model
+
 All primary entities use UUID v4 keys.
 UserProfile {
   "id": "uuid",
@@ -85,102 +81,70 @@ AccessLog {
   "result_size": 123,
   "hash": "sha256"
 }
+
 Entity Relationships
 UserProfile 1 → * Fact
-
-
 UserProfile 1 → * ContextEvent
-
-
 Request 1 → 1 Approval (may be null until the user acts)
-
-
 Request 1 → * AccessLog
 
-
 4. Approval Flow
+
 Request Agent posts to /pcp/request with a scoped query.
-
-
 Queue Gateway stores the request (status = pending) and pushes a notification.
-
-
 User Action Mobile UI: swipe right to approve, left to deny. Partial allows field selection.
-
-
 Token On approval, the gateway mints a short‑lived JWT bound to the masked dataset.
-
-
 Retrieval Agent redeems the token at /pcp/data/{request_id} — one‑time stream.
-
-
 Audit Every access is logged to an append‑only ledger.
-
 
 Edge‑Case Rules
 Silence Timeout Pending > 24 h → auto‑deny.
-
-
 Emergency Flag User may pre‑grant “always allow” profiles (e.g., ICE contacts).
-
-
 Conflict Most recent decision supersedes earlier ones.
-
-
 Minors Users under 13 require a parent profile for approvals.
-
-
 Streaming Chunked requests; each chunk is individually signed.
 
 
 5. Search & RAG Layer
+
 Indexer Nightly batch encodes Facts and ContextEvents using text‑embedding‑3‑small; stored in an HNSW index (cosine‑L2).
-
-
 Retriever Hybrid BM25 + ANN fusion.
-
-
 Re‑ranker Mistral‑RERANK‑32k on the top‑64 hits.
-
-
 Synthesizer GPT‑4o summarizer with system guardrails; returns the minimal answer set.
-
 
 results_bm25  = bm25(query)
 results_vec   = ann(query_emb)
 merged        = rank_fusion(results_bm25, results_vec)
 reranked      = mistral_rerank(query, merged[:64])
 final_results = reranked[:k]
+
 6. API Surface (REST)
+
 GET  /pcp/status                       # Heartbeat
 POST /pcp/request                      # Create data request
 GET  /pcp/request/{id}                 # Request + approval state
 POST /pcp/approval/{id}                # User decision (internal)
 GET  /pcp/data/{id}?token=JWT          # One‑time data pull
 GET  /pcp/search?q=…&top_k=10          # RAG endpoint (returns citations)
+
 7. Security & Compliance
+
 Encryption in Transit Curve25519 E2EE between device, phone, and vault.
-
-
 Tokens JWT, 10‑minute TTL, single use.
-
-
 Encryption at Rest AES‑GCM‑256; keys stored in Secure Enclave.
-
-
 Audit Ledger Append‑only; Merkle‑tree hash anchored daily to an L2 Ethereum chain.
-
-
 Right to Erasure DELETE /pcp/user/{id} queues a wipe job and issues a zero‑knowledge proof.
 
 
 8. Minimal Device SDK (C++ Sketch)
+
 class MemoVault {
   bool storeFact(std::string text, std::string type);
   RequestId sendRequest(Json scope);
   void pollApprovals();
 };
 9. Roadmap
+
 Phase
 Milestone
 v0.1
